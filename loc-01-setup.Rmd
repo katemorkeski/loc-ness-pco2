@@ -27,12 +27,24 @@ combined <- read_delim(here('LOC-01_Combined_Nav_TSG_Fluo_HydroFIA.txt'))
 
 combined$DateTime_UTC <- as.POSIXct(combined$DateTime_UTC, tz = "UTC", format="%d-%b-%Y %H:%M:%OS")
 
+```
+
+```{r}
+
 ggplot(combined, aes(x = DateTime_UTC, y = Temp1_C)) +
   geom_point() +
   theme_minimal()
 
 ggplot(combined, aes(x = DateTime_UTC, y = Temp2_C)) +
   geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = DateTime_UTC, y = Corrected_TA_umol_kg_)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = DateTime_UTC, y = Corrected_TA_umol_kg_)) +
+  geom_line() +
   theme_minimal()
 
 ```
@@ -124,7 +136,7 @@ ggplot(GO_LOC01, aes(x = date_time_utc, y = alkalinity_umolkg)) +
 ```{r}
 
 GO_LOC01 <- GO_LOC01 |>
-  select(-PcDate, -PcTime, -date_time, -'N/A') |>
+  select(-date_time, -'N/A') |>
   relocate(date_time_utc, .before = Type) |>
   relocate(latitude, .before = Type) |>
   relocate(longitude, .before = Type)
