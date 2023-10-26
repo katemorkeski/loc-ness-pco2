@@ -1,0 +1,137 @@
+---
+title: "loc-01-setup"
+author: "Kate Morkeski"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## load libraries
+
+```{r}
+
+library(here)
+library(lubridate)
+library(tidyverse)
+
+```
+
+## read in GPS and other underway data
+
+```{r}
+
+combined <- read_delim(here('LOC-01_Combined_Nav_TSG_Fluo_HydroFIA.txt')) 
+
+combined$DateTime_UTC <- as.POSIXct(combined$DateTime_UTC, tz = "UTC", format="%d-%b-%Y %H:%M:%OS")
+
+ggplot(combined, aes(x = DateTime_UTC, y = Temp1_C)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = DateTime_UTC, y = Temp2_C)) +
+  geom_point() +
+  theme_minimal()
+
+```
+
+```{r}
+
+# read in GO data
+GOfiles <- dir(here("LOC-01_GO-Data/"), "*.txt") # get file names
+
+GO_LOC01 <- GOfiles %>% map_dfr(~ read_tsv(here("LOC-01_GO-Data/", .), show_col_types = FALSE, ))
+
+```
+
+```{r}
+
+# handle date and time columns
+# combine date and time
+GO_LOC01$PcDate <- as.character(GO_LOC01$PcDate) 
+GO_LOC01$PcTime <- as.character(GO_LOC01$PcTime) 
+#GO_LOC01$PcTime <- as.character(GO_LOC01$PcTime) 
+GO_LOC01$date_time <- paste(GO_LOC01$PcDate, GO_LOC01$PcTime)
+GO_LOC01$date_time_utc <- as.POSIXct(GO_LOC01$date_time, tz = "UTC", format="%d/%m/%y %H:%M:%OS")
+
+
+ggplot(GO_LOC01, aes(x = date_time_utc, y = EquPress)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC01, aes(x = date_time_utc, y = CO2ppm)) +
+  geom_point() +
+  theme_minimal()
+
+```
+
+# Interpolate CTD data to GO timestamps
+
+```{r}
+
+# # interpolate atmospheric pressure to GO data time stamps
+ 
+Lat <- data.frame(approx(combined$DateTime_UTC, combined$Latitude, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
+latitude <- Lat$y 
+
+Lon <- data.frame(approx(combined$DateTime_UTC, combined$Longitude, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
+longitude <- Lon$y 
+
+dye <- data.frame(approx(combined$DateTime_UTC, combined$Dye_ppb, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
+dye_ppb <- dye$y 
+
+Temp1_C <- data.frame(approx(combined$DateTime_UTC, combined$Temp1_C, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
+temp1_C <- Temp1_C$y 
+
+Temp2_C <- data.frame(approx(combined$DateTime_UTC, combined$Temp2_C, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
+temp2_C <- Temp2_C$y 
+
+sal <- data.frame(approx(combined$DateTime_UTC, combined$Salinity_PSU, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
+salinity_psu <- sal$y 
+
+alk <- data.frame(approx(combined$DateTime_UTC, combined$Corrected_TA_umol_kg_, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
+alkalinity_umolkg <- alk$y 
+
+GO_LOC01 <- cbind(GO_LOC01, latitude, longitude, dye_ppb, temp1_C, temp2_C, salinity_psu, alkalinity_umolkg)
+
+
+```
+# Inspect interpolated ancillary data
+
+```{r}
+
+ggplot(GO_LOC01, aes(x = date_time_utc, y = temp1_C)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC01, aes(x = date_time_utc, y = temp2_C)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC01, aes(x = date_time_utc, y = salinity_psu)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC01, aes(x = date_time_utc, y = alkalinity_umolkg)) +
+  geom_point() +
+  theme_minimal()
+
+```
+# Adjust columns and write csv
+
+```{r}
+
+GO_LOC01 <- GO_LOC01 |>
+  select(-PcDate, -PcTime, -date_time, -'N/A') |>
+  relocate(date_time_utc, .before = Type) |>
+  relocate(latitude, .before = Type) |>
+  relocate(longitude, .before = Type)
+
+write.csv(GO_LOC01, here('GO_LOC01.csv'), row.names = FALSE)
+
+```
+
+
+
