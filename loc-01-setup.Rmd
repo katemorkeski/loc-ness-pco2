@@ -27,6 +27,16 @@ combined <- read_delim(here('LOC-01_Combined_Nav_TSG_Fluo_HydroFIA.txt'))
 
 combined$DateTime_UTC <- as.POSIXct(combined$DateTime_UTC, tz = "UTC", format="%d-%b-%Y %H:%M:%OS")
 
+met <- read_delim(here('Metdat.dat'), skip = 1)
+
+pressure <- met |> select(TIMESTAMP, BaroPress)  
+
+pressure <- pressure |> rename(BaroPress_hPa = BaroPress) 
+pressure <- pressure[-1,]
+pressure <- pressure[-1,]
+
+#TODO: format columns as date and time for later interpolation
+
 ```
 
 ```{r}
@@ -83,8 +93,7 @@ ggplot(GO_LOC01, aes(x = date_time_utc, y = CO2ppm)) +
 
 ```{r}
 
-# # interpolate atmospheric pressure to GO data time stamps
- 
+
 Lat <- data.frame(approx(combined$DateTime_UTC, combined$Latitude, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
 latitude <- Lat$y 
 
@@ -106,7 +115,10 @@ salinity_psu <- sal$y
 alk <- data.frame(approx(combined$DateTime_UTC, combined$Corrected_TA_umol_kg_, xout = GO_LOC01$date_time_utc, rule = 2, method = "linear"))
 alkalinity_umolkg <- alk$y 
 
-GO_LOC01 <- cbind(GO_LOC01, latitude, longitude, dye_ppb, temp1_C, temp2_C, salinity_psu, alkalinity_umolkg)
+press <- data.frame(approx(pressure$TIMESTAMP, pressure$BaroPress_hPa, xout = GO_LOC01$date_time_utc, rule = 1, method = "linear"))
+atm_pressure_hPa <- press$y 
+
+GO_LOC01 <- cbind(GO_LOC01, latitude, longitude, atm_pressure_hPa, dye_ppb, temp1_C, temp2_C, salinity_psu, alkalinity_umolkg)
 
 
 ```
@@ -139,7 +151,8 @@ GO_LOC01 <- GO_LOC01 |>
   select(-date_time, -'N/A') |>
   relocate(date_time_utc, .before = Type) |>
   relocate(latitude, .before = Type) |>
-  relocate(longitude, .before = Type)
+  relocate(longitude, .before = Type) 
+  
 
 write.csv(GO_LOC01, here('GO_LOC01.csv'), row.names = FALSE)
 

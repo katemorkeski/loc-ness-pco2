@@ -16,6 +16,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(here)
 library(lubridate)
 library(tidyverse)
+library(sf)
+library(viridis)
 
 ```
 
@@ -26,6 +28,8 @@ library(tidyverse)
 pCO2_LOC01 <- read_csv(here("LOC-01_Working.csv"))
 
 pCO2_LOC01 <- pCO2_LOC01 |>  filter(Type == 'EQU') |> rename(xCO2_corr = "xCO2 corr")
+
+pCO2_LOC01$log_dye_ppb <- log(pCO2_LOC01$dye_ppb)
 
 ```
 
@@ -56,6 +60,10 @@ ggplot(pCO2_LOC01, aes(x = date_time_utc, y = alkalinity_umolkg)) +
   theme_minimal()
 ggsave("alk-time.png")
 
+ggplot(pCO2_LOC01, aes(x = date_time_utc, y = log_dye_ppb)) +
+  geom_line() +
+  theme_minimal()
+
 
 ```
 
@@ -65,10 +73,93 @@ ggplot(pCO2_LOC01, aes(x = longitude, y = latitude, color = xCO2_corr)) +
   geom_path() +
   #geom_point(data = may_EQU, aes(x = Longitude, y = Latitude, color = F_micromol_m2_s)) +  
   scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 412)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-  #scale_y_continuous(limits = c(28.5, 30.5))
+#scale_y_continuous(limits = c(28.5, 30.5))
 ggsave("xCO2-track.png")
 
+
+ggplot(pCO2_LOC01, aes(x = longitude, y = latitude, color = xCO2_corr)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01, aes(x = longitude, y = latitude, color = xCO2_corr)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 412)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
 ```
+```{r}
+
+pCO2_LOC01_plume <- pCO2_LOC01 |>  filter(longitude > -70.9) 
+
+```
+
+```{r}
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = xCO2_corr)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = xCO2_corr)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 440)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = temp1_C)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = temp1_C)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 17.5)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = salinity_psu)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = salinity_psu)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 31.6)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = alkalinity_umolkg)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = alkalinity_umolkg)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 2220)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 0.5)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +  
+  scale_color_gradient2(low = "darkblue", high = "yellow", aesthetics = "color", midpoint = 3)+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +  
+  scale_color_gradient(low = "blue4", high = "yellow")+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+
+```
+
+
+
+# use GSHHS coastline data per Dylan's code
+
+```{r}
+
+# turn off spherical geometry to avoid "duplicate vertex" errors
+#sf_use_s2(FALSE)
+
+# read shapefile 
+coast <- st_read(here("GSHHS_f_L1")) %>%
+  st_make_valid() %>%
+  st_crop(xmin = -72.5, xmax = -69.5, ymin = 40.5, ymax = 41.5)
+
+# plot result
+ggplot()+geom_sf(data = mass, fill = "darkgrey", colour = "black")+
+  coord_sf(crs = 4326, xlim = c(-72.5, -69.5), ylim = c(40.5, 41.5))
+
+# TODO: troubleshoot data and GSHHG coordinates appearing offset
+# try turning data into a shapefile
+LOC01_SF <- st_as_sf(pCO2_LOC01,
+                     coords = c("longitude", "latitude"),
+                     crs = 4326)
+
+# plot data with GSHHG map
+ggplot()+geom_sf(data = coast, fill = "darkgrey", colour = "black")+
+  coord_sf(xlim = c(-72.5, -69.5), ylim = c(40.5, 41.5))+
+  geom_sf(data = LOC01_SF, aes(color = xCO2_corr)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 412) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+```
+
 
 ```{r}
 
