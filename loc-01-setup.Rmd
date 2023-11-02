@@ -35,7 +35,9 @@ pressure <- pressure |> rename(BaroPress_hPa = BaroPress)
 pressure <- pressure[-1,]
 pressure <- pressure[-1,]
 
-#TODO: format columns as date and time for later interpolation
+#format columns as date and time for later interpolation
+pressure$TIMESTAMP <- as.POSIXct(pressure$TIMESTAMP, tz = "UTC", format="%Y-%m-%d %H:%M:%OS")
+pressure$BaroPress_hPa <- as.double(pressure$BaroPress_hPa)
 
 ```
 
@@ -53,7 +55,7 @@ ggplot(combined, aes(x = DateTime_UTC, y = Corrected_TA_umol_kg_)) +
   geom_point() +
   theme_minimal()
 
-ggplot(combined, aes(x = DateTime_UTC, y = Corrected_TA_umol_kg_)) +
+ggplot(pressure, aes(x = TIMESTAMP, y = BaroPress_hPa)) +
   geom_line() +
   theme_minimal()
 
