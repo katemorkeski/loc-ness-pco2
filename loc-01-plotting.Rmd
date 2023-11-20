@@ -27,18 +27,19 @@ library(viridis)
 
 pCO2_LOC01 <- read_csv(here("LOC-01_Working.csv"))
 
-pCO2_LOC01 <- pCO2_LOC01 |>  filter(Type == 'EQU') |> rename(xCO2_corr = "xCO2 corr")
+pCO2_LOC01 <- pCO2_LOC01 |>  
+  filter(Type == 'EQU') |> 
+  rename(xCO2_corr = "xCO2 corr") |>
+  rename(dfCO2_wa = "dfCO2(w-a)") |>
+  rename(fCO2_uatm = "fCO2 water")
 
 pCO2_LOC01$log_dye_ppb <- log(pCO2_LOC01$dye_ppb)
+
+pCO2_LOC01$date_time_utc <- as.POSIXct(pCO2_LOC01$date_time_utc, tz = "UTC", format="%m/%d/%Y %H:%M")
 
 ```
 
 ```{r}
-
-
-ggplot(pCO2_LOC01, aes(x = date_time_utc, y = xCO2_corr)) +
-  geom_point() +
-  theme_minimal()
 
 ggplot(pCO2_LOC01, aes(x = date_time_utc, y = xCO2_corr)) +
   geom_line() +
@@ -50,10 +51,15 @@ ggplot(pCO2_LOC01, aes(x = date_time_utc, y = salinity_psu)) +
   theme_minimal()
 ggsave("sal-time.png")
 
-ggplot(pCO2_LOC01, aes(x = date_time_utc, y = temp1_C)) +
+ggplot(pCO2_LOC01, aes(x = date_time_utc, y = temp2_C)) +
   geom_line() +
   theme_minimal()
 ggsave("temp-time.png")
+
+ggplot(pCO2_LOC01, aes(x = date_time_utc, y = atm_pressure_hPa)) +
+  geom_line() +
+  theme_minimal()
+ggsave("pressure-time.png")
 
 ggplot(pCO2_LOC01, aes(x = date_time_utc, y = alkalinity_umolkg)) +
   geom_line() +
@@ -63,6 +69,36 @@ ggsave("alk-time.png")
 ggplot(pCO2_LOC01, aes(x = date_time_utc, y = log_dye_ppb)) +
   geom_line() +
   theme_minimal()
+ggsave("dye-time.png")
+
+ggplot(pCO2_LOC01, aes(x = date_time_utc, y = fCO2_uatm)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("fCO2-time-all-pts.png")
+
+ggplot(pCO2_LOC01, aes(x = date_time_utc, y = fCO2_uatm, color = salinity_psu)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("fCO2-time-all-pts-sal.png")
+
+ggplot(pCO2_LOC01, aes(x = date_time_utc, y = fCO2_uatm, color = temp2_C)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("fCO2-time-all-pts-temp.png")
+
+ggplot(pCO2_LOC01, aes(x = date_time_utc, y = dfCO2_wa)) +
+  geom_line() +
+  theme_minimal()
+#ggsave("dfCO2-time.png")
+
+ggplot(pCO2_LOC01, aes(x = date_time_utc, y = dfCO2_wa)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("dfCO2-time-pts.png")
 
 
 ```
@@ -71,34 +107,70 @@ ggplot(pCO2_LOC01, aes(x = date_time_utc, y = log_dye_ppb)) +
 
 ggplot(pCO2_LOC01, aes(x = longitude, y = latitude, color = xCO2_corr)) +
   geom_path() +
-  #geom_point(data = may_EQU, aes(x = Longitude, y = Latitude, color = F_micromol_m2_s)) +  
   scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 412)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 #scale_y_continuous(limits = c(28.5, 30.5))
-ggsave("xCO2-track.png")
 
+ggplot(pCO2_LOC01, aes(x = longitude, y = latitude, color = fCO2_uatm)) +
+  geom_path() +
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 403.5)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("fCO2-track.png")
+
+ggplot(pCO2_LOC01, aes(x = longitude, y = latitude, color = dfCO2_wa)) +
+  geom_path() +
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 0)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+#scale_y_continuous(limits = c(28.5, 30.5))
 
 ggplot(pCO2_LOC01, aes(x = longitude, y = latitude, color = xCO2_corr)) +
   geom_path() +
   geom_point(data = pCO2_LOC01, aes(x = longitude, y = latitude, color = xCO2_corr)) +  
   scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 412)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+#ggsave("xCO2-track-pts.png")
+
+ggplot(pCO2_LOC01, aes(x = longitude, y = latitude, color = fCO2_uatm)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01, aes(x = longitude, y = latitude, color = fCO2_uatm)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 403.5)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("fCO2-track-pts.png")
+
+ggplot(pCO2_LOC01, aes(x = longitude, y = latitude, color = dfCO2_wa)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01, aes(x = longitude, y = latitude, color = dfCO2_wa)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 0)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("dfCO2-track-pts.png")
 
 ```
 ```{r}
 
-pCO2_LOC01_plume <- pCO2_LOC01 |>  filter(longitude > -70.9) 
+pCO2_LOC01_plume <- pCO2_LOC01 |>  filter(longitude > -70.78)
 
 ```
 
 ```{r}
 ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = xCO2_corr)) +
   geom_path() +
-  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = xCO2_corr)) +  
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = xCO2_corr)) + scale_y_continuous(limits = c(41.00, 41.16)) + scale_x_continuous(limits = c(-70.78, -70.68))+
   scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 440)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
-ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = temp1_C)) +
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = fCO2_uatm)) +
   geom_path() +
-  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = temp1_C)) +  
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = fCO2_uatm)) +  
+  scale_color_gradient(low = "#06A5C7", high = "#B40426")  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("fCO2-track-plume-pts.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = fCO2_uatm)) +
+  geom_path() +
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 403.5)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("fCO2-track-plume.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = dfCO2_wa)) +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = dfCO2_wa)) +  
+  scale_color_gradient(low = "#06A5C7", high = "#B40426")  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = temp2_C)) +
+  geom_path() +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = temp2_C)) +  
   scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 17.5)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("temp-track-plume.png")
 
 ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = salinity_psu)) +
   geom_path() +
@@ -115,16 +187,93 @@ ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) 
   geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +  
   scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 0.5)  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
-ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +
-  geom_path() +
-  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +  
-  scale_color_gradient2(low = "darkblue", high = "yellow", aesthetics = "color", midpoint = 3)+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+# ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +
+#   geom_path() +
+#   geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +  
+#   scale_color_gradient2(low = "darkblue", high = "yellow", aesthetics = "color", midpoint = 3)+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
 ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +
   geom_path() +
   geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +  
   scale_color_gradient(low = "blue4", high = "yellow")+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
+ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +
+  geom_point(data = pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) +  
+  scale_color_gradient(low = "blue4", high = "yellow")+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+
+```
+```{r}
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = xCO2_corr)) +
+  geom_line() +
+  theme_minimal()
+ggsave("xCO2-time.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = salinity_psu)) +
+  geom_line() +
+  theme_minimal()
+ggsave("sal-time.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = temp2_C)) +
+  geom_line() +
+  theme_minimal()
+ggsave("temp-time.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = atm_pressure_hPa)) +
+  geom_line() +
+  theme_minimal()
+ggsave("pressure-time.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = alkalinity_umolkg)) +
+  geom_line() +
+  theme_minimal()
+#ggsave("alk-time.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = log_dye_ppb)) +
+  geom_line() +
+  theme_minimal()
+ggsave("dye-time.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = fCO2_uatm)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("fCO2-time.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = fCO2_uatm, color = salinity_psu)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("fCO2-time-sal.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = fCO2_uatm, color = temp2_C)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("fCO2-time-temp.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = fCO2_uatm, color = log_dye_ppb)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("fCO2-time-dye.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = fCO2_uatm, color = alkalinity_umolkg)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = dfCO2_wa)) +
+  geom_line() +
+  theme_minimal()
+#ggsave("dfCO2-time.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = date_time_utc, y = dfCO2_wa)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal()
+ggsave("dfCO2-time.png")
 
 ```
 
@@ -135,18 +284,24 @@ ggplot(pCO2_LOC01_plume, aes(x = longitude, y = latitude, color = log_dye_ppb)) 
 ```{r}
 
 # turn off spherical geometry to avoid "duplicate vertex" errors
-#sf_use_s2(FALSE)
+sf_use_s2(FALSE)
 
 # read shapefile 
 coast <- st_read(here("GSHHS_f_L1")) %>%
   st_make_valid() %>%
-  st_crop(xmin = -72.5, xmax = -69.5, ymin = 40.5, ymax = 41.5)
+  st_crop(xmin = -72.5, xmax = -69.5, ymin = 40.5, ymax = 42)
 
 # plot result
-ggplot()+geom_sf(data = mass, fill = "darkgrey", colour = "black")+
-  coord_sf(crs = 4326, xlim = c(-72.5, -69.5), ylim = c(40.5, 41.5))
+ggplot()+geom_sf(data = coast, fill = "darkgrey", colour = "black")+
+  coord_sf(crs = 4326, xlim = c(-72.5, -69.5), ylim = c(40.5, 42)) 
 
-# TODO: troubleshoot data and GSHHG coordinates appearing offset
+# # plot data with GSHHG map
+# ggplot()+geom_sf(data = coast, fill = "darkgrey", colour = "black")+
+#   coord_sf(xlim = c(-72.5, -69.5), ylim = c(40.5, 41.5))+
+#   geom_sf(data = pCO2_LOC01, aes(color = dfCO2_wa, geometry = c(latitude, longitude))) +  
+#   scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 412) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# data and GSHHG coordinates appearing offset
 # try turning data into a shapefile
 LOC01_SF <- st_as_sf(pCO2_LOC01,
                      coords = c("longitude", "latitude"),
@@ -154,29 +309,64 @@ LOC01_SF <- st_as_sf(pCO2_LOC01,
 
 # plot data with GSHHG map
 ggplot()+geom_sf(data = coast, fill = "darkgrey", colour = "black")+
-  coord_sf(xlim = c(-72.5, -69.5), ylim = c(40.5, 41.5))+
-  geom_sf(data = LOC01_SF, aes(color = xCO2_corr)) +  
-  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 412) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  coord_sf(xlim = c(-72.5, -69.5), ylim = c(40.5, 42))+
+  geom_sf(data = LOC01_SF, aes(color = fCO2_uatm)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 403.5) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+ggplot()+geom_sf(data = coast, fill = "darkgrey", colour = "black")+
+  coord_sf(xlim = c(-72.5, -69.5), ylim = c(40.5, 42))+
+  geom_sf(data = LOC01_SF, aes(color = fCO2_uatm)) +  
+  scale_color_gradient(low = "#06A5C7", high = "#B40426") + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("fCO2_map.png")
+
+ggplot()+geom_sf(data = coast, fill = "darkgrey", colour = "black")+
+  coord_sf(xlim = c(-72.5, -69.5), ylim = c(40.5, 42))+
+  geom_sf(data = LOC01_SF, aes(color = dfCO2_wa)) +  
+  scale_fill_gradient2(low = "#06A5C7", mid = "#06A5C7", high = "#B40426", aesthetics = "color", midpoint = 0) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+ggsave("dfCO2_map.png")
+
+ggplot()+geom_sf(data = coast, fill = "darkgrey", colour = "black")+
+  coord_sf(xlim = c(-72.5, -69.5), ylim = c(40.5, 42))+
+  geom_sf(data = LOC01_SF, aes(color = alkalinity_umolkg)) +  
+  scale_fill_gradient(low = "#06A5C7", high = "#B40426") + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
 
 ```
 
 
 ```{r}
 
-ggplot(pCO2_LOC01, aes(x = salinity_psu, y = xCO2_corr)) +
+ggplot(pCO2_LOC01, aes(x = salinity_psu, y = fCO2_uatm)) +
   geom_point() +
   theme_minimal()
-ggsave("xCO2-sal.png")
+ggsave("xCO2-sal_all.png")
 
-ggplot(pCO2_LOC01, aes(x = temp1_C, y = xCO2_corr)) +
+ggplot(pCO2_LOC01, aes(x = temp2_C, y = fCO2_uatm)) +
   geom_point() +
   theme_minimal()
-ggsave("xCO2-temp.png")
+ggsave("xCO2-temp_all.png")
 
-ggplot(pCO2_LOC01, aes(x = alkalinity_umolkg, y = xCO2_corr)) +
+ggplot(pCO2_LOC01, aes(x = alkalinity_umolkg, y = fCO2_uatm)) +
   geom_point() +
   theme_minimal()
-ggsave("xCO2-alk.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = salinity_psu, y = fCO2_uatm)) +
+  geom_point() +
+  theme_minimal()
+ggsave("xCO2-sal_plume.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = temp2_C, y = fCO2_uatm)) +
+  geom_point() +
+  theme_minimal()
+ggsave("xCO2-temp_plume.png")
+
+ggplot(pCO2_LOC01_plume, aes(x = alkalinity_umolkg, y = fCO2_uatm)) +
+  geom_point() +
+  theme_minimal()
+
+# ggplot(pCO2_LOC01, aes(x = alkalinity_umolkg, y = xCO2_corr)) +
+#   geom_point() +
+#   theme_minimal()
+# ggsave("xCO2-alk.png")
 
 ```
 
