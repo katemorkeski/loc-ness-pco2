@@ -160,5 +160,32 @@ write.csv(GO_LOC01, here('GO_LOC01.csv'), row.names = FALSE)
 
 ```
 
+# Add bottle salinity to CTD data set
+
+```{r}
+
+ctd_bottles <- read_csv(here('CTD_Bottles_combined.csv')) 
+
+#combined$DateTime_UTC <- as.POSIXct(combined$DateTime_UTC, tz = "UTC", format="%d-%b-%Y %H:%M:%OS")
+
+sal <- read_delim(here('LOC-01_CTD_bottle_salinometer.txt'), col_names = FALSE)
+
+# define headers for columns in desired order
+sal <- sal |> 
+  rename('Salinity bottle' = X1) |>
+  select(-X2) |>
+  rename(salinity_psu = X3) |>
+  rename(flag = X4) 
+
+ctd_bottles <- left_join(ctd_bottles, sal, by = 'Salinity bottle')
+
+ggplot(ctd_bottles, aes(x = salinity_psu, y = Sal00)) +
+  geom_point() +
+  theme_minimal()
+ggsave('ctd-vs-bottle-sal.png')
+
+write.csv(ctd_bottles, here('CTD_Bottles_combined_bottlesal.csv'), row.names = FALSE)
+
+```
 
 
