@@ -1,0 +1,134 @@
+---
+title: "loc-01-wind"
+author: "Kate Morkeski"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## load libraries
+
+```{r}
+
+library(here)
+library(lubridate)
+library(tidyr)
+library(readr)
+library(dplyr)
+library(stringr)
+library(sf)
+library(viridis)
+#library(stats)
+library(egg)
+
+```
+
+## read in pCO2 data
+
+```{r}
+
+pCO2_LOC01 <- read_csv(here("LOC-01_Working.csv"))
+
+pCO2_LOC01 <- pCO2_LOC01 |>  
+  filter(Type == 'EQU') |> 
+  rename(xCO2_corr = "xCO2 corr") |>
+  rename(dfCO2_wa = "dfCO2(w-a)") |>
+  rename(fCO2_uatm = "fCO2 water")
+
+pCO2_LOC01$log_dye_ppb <- log(pCO2_LOC01$dye_ppb)
+
+pCO2_LOC01$date_time_utc <- as.POSIXct(pCO2_LOC01$date_time_utc, tz = "UTC", format="%m/%d/%Y %H:%M")
+
+```
+
+## read in MVCO met data
+
+```{r}
+
+met <- read_delim(here("ASIT/asit_data.txt"))
+
+met$atime <- as.POSIXct(met$atime, tz = "UTC", format="%d-%b-%Y %H:%M:%S")
+
+met$year <- year(met$atime)
+
+met <- met |> filter(year == 2023)
+
+met$julian <- yday(met$atime)
+
+plot1 <- ggplot(met, aes(x = atime, y = air_temp_mean)) +
+  geom_line() +
+  theme_minimal()+
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank())
+plot2 <- ggplot(met, aes(x = atime, y = air_press_mean)) +
+  geom_line() +
+  theme_minimal()+theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank())
+plot3 <- ggplot(met, aes(x = atime, y = wspd_u_mean)) +
+  geom_line() +
+  theme_minimal()+theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank())
+plot4 <- ggplot(met, aes(x = atime, y = wspd_v_mean)) +
+  geom_line() +
+  theme_minimal()
+ggarrange(plot1, plot2, plot3, plot4, ncol = 1)
+#ggsave("met_2022.png")
+
+#duplicated(met$atime)
+
+```
+
+```{r}
+
+met01 <- met |> filter(238 < julian) |> filter(julian < 250)
+
+plot1 <- ggplot(met01, aes(x = atime, y = air_temp_mean)) +
+  geom_line() +
+  theme_minimal()+
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank())
+plot2 <- ggplot(met01, aes(x = atime, y = air_press_mean)) +
+  geom_line() +
+  theme_minimal()+
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank())
+plot3 <- ggplot(met01, aes(x = atime, y = wspd_u_mean)) +
+  geom_line() +
+  theme_minimal()+
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank())
+plot4 <- ggplot(met01, aes(x = atime, y = wspd_v_mean)) +
+  geom_line() +
+  theme_minimal()
+ggarrange(plot1, plot2, plot3, plot4, ncol = 1)
+#ggsave("met_2022.png")
+
+
+plot5 <- ggplot(met01, aes(x = atime, y = wspd_u_mean)) +
+  geom_line() +
+  theme_minimal()+
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank())
+plot6 <- ggplot(met01, aes(x = atime, y = wspd_v_mean)) +
+  geom_line() +
+  theme_minimal()
+ggarrange(plot5, plot6, ncol = 1)
+
+plot5 <- ggplot(met01, aes(x = atime, y = wspd_u_mean)) +
+  geom_line(size = 0.1)+
+  geom_point(size = 0.3) +
+  theme_minimal()+
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank())
+plot6 <- ggplot(met01, aes(x = atime, y = wspd_v_mean)) +
+  geom_line(size = 0.1)+
+  geom_point(size = 0.1) +
+  theme_minimal()
+ggarrange(plot5, plot6, ncol = 1)
+
+
+```
+
