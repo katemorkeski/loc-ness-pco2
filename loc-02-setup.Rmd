@@ -23,6 +23,8 @@ library(tidyverse)
 
 ```{r}
 
+Sys.setenv(TZ='UTC')
+
 combined <- read_csv(here('loc-02-input/loc02_uw_qc.csv')) 
 
 #combined$datetime_utc <- as.POSIXct(combined$datetime_utc, tz = "UTC", format="%d-%b-%Y %H:%M:%OS")
@@ -120,8 +122,32 @@ GO_LOC02$PcTime <- as.character(GO_LOC02$PcTime)
 GO_LOC02$date_time <- paste(GO_LOC02$PcDate, GO_LOC02$PcTime)
 GO_LOC02$date_time_utc <- as.POSIXct(GO_LOC02$date_time, tz = "UTC", format="%d/%m/%y %H:%M:%OS")
 
-
+# plot a few variables
 ggplot(GO_LOC02, aes(x = date_time_utc, y = EquPress)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = EquTemp)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = CO2ppm)) +
+  geom_point() +
+  theme_minimal()
+
+# pCO2 data start at 2025-08-12 16:49, TSG combined data set starts at 2025-08-13 07:37
+# are there SSS and SST data from the interval in between to allow pCO2 calculations?
+
+# remove lines without TSG
+GO_LOC02 <- GO_LOC02 |> filter(date_time_utc > "2025-08-13 07:37:00")
+# data set now begins with standard run at start of TSG data
+
+# plot again
+ggplot(GO_LOC02, aes(x = date_time_utc, y = EquPress)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = EquTemp)) +
   geom_point() +
   theme_minimal()
 
@@ -134,6 +160,10 @@ ggplot(GO_LOC02, aes(x = date_time_utc, y = CO2ppm)) +
 # Interpolate CTD data to GO timestamps
 
 ```{r}
+
+# using function "approx" to interpolate TSG data to GO timestamps
+# rule argument: an integer (of length 1 or 2) describing how interpolation is to take place outside the interval [min(x), max(x)]. If rule is 1 then NAs are returned for such points and if it is 2, the value at the closest data extreme is used. Use, e.g., rule = 2:1, if the left and right side extrapolation should differ.
+# method argument: specifies the interpolation method to be used. Choices are "linear" or "constant".
 
 
 lat <- data.frame(approx(combined$datetime_utc, combined$latitude, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
@@ -184,24 +214,36 @@ ggplot(GO_LOC02, aes(x = date_time_utc, y = rhodamine_ppb)) +
 #   geom_point() +
 #   theme_minimal()
 
-# pCO2 data start at 2025-08-12 16:49, TSG combined data set starts at 2025-08-13 07:37
-# are there SSS and SST data from the interval in between to allow pCO2 calculations?
-
 ```
 # Adjust columns and write csv
 
 ```{r}
 
 GO_LOC02 <- GO_LOC02 |>
+  #filter(Type != 'SHUT DOWN') |> # this removes SHUT DOWN rows and error message rows (that have NA in all data cols)
   select(-date_time, -'N/A') |>
   relocate(date_time_utc, .before = Type) |>
   relocate(latitude, .before = Type) |>
   relocate(longitude, .before = Type) 
   
-
 write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02.csv'), row.names = FALSE)
 
 ```
+# problem with equ pressure? 
+
+```{r}
+unique(GO_LOC02$EquPress)
+```
+
+
+```{r}
+# pco2sys processing notes
+
+#flagged as bad three instances of low H2O flow followed by CO2 spike
+#trouble getting equ press to calculate -- need to do this following data transformation module
+
+```
+
 
 
 
