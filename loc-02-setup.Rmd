@@ -1,0 +1,208 @@
+---
+title: "loc-02-setup"
+author: "Kate Morkeski"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## load libraries
+
+```{r}
+
+library(here)
+library(lubridate)
+library(tidyverse)
+
+```
+
+## read in GPS and other underway data
+
+```{r}
+
+combined <- read_csv(here('loc-02-input/loc02_uw_qc.csv')) 
+
+#combined$datetime_utc <- as.POSIXct(combined$datetime_utc, tz = "UTC", format="%d-%b-%Y %H:%M:%OS")
+
+met <- read_delim(here('loc-02-input/Metdat.dat'), skip = 1)
+
+pressure <- met |> select(TIMESTAMP, BaroPress)  
+
+pressure <- pressure |> rename(BaroPress_hPa = BaroPress) 
+pressure <- pressure[-1,]
+pressure <- pressure[-1,]
+
+#format columns as date and time for later interpolation
+pressure$TIMESTAMP <- as.POSIXct(pressure$TIMESTAMP, tz = "UTC", format="%Y-%m-%d %H:%M:%OS")
+pressure$BaroPress_hPa <- as.double(pressure$BaroPress_hPa)
+
+```
+
+```{r}
+
+ggplot(combined, aes(x = datetime_utc, y = temperature, color = temperature_flag)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = datetime_utc, y = salinity, color = salinity_flag)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = datetime_utc, y = oxygen_umol_kg)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = datetime_utc, y = ph_corrected, color = ph_flag)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = datetime_utc, y = rho_ppb, color = rho_flag)) +
+  geom_point() +
+  theme_minimal()
+
+# ggplot(combined, aes(x = DateTime_UTC, y = Corrected_TA_umol_kg_)) +
+#   geom_point() +
+#   theme_minimal()
+
+ggplot(pressure, aes(x = TIMESTAMP, y = BaroPress_hPa)) +
+  geom_line() +
+  theme_minimal()
+
+```
+```{r}
+
+# set values with bad flags to NA
+
+combined <- combined |>
+  mutate(temperature = replace(temperature, temperature_flag == "4", NA)) |>
+  mutate(salinity = replace(salinity, salinity_flag == "4", NA)) |>
+  mutate(ph_corrected = replace(ph_corrected, ph_flag == "4", NA)) |>
+  mutate(rho_ppb = replace(rho_ppb, rho_flag == "4", NA)) 
+ 
+ggplot(combined, aes(x = datetime_utc, y = temperature, color = temperature_flag)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = datetime_utc, y = salinity, color = salinity_flag)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = datetime_utc, y = ph_corrected, color = ph_flag)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(combined, aes(x = datetime_utc, y = rho_ppb, color = rho_flag)) +
+  geom_point() +
+  theme_minimal()
+
+```
+
+
+```{r}
+
+# read in GO data
+GOfiles <- dir(here("loc-02-input/pco2_raw"), "*.txt") # get file names
+
+GO_LOC02 <- GOfiles %>% map_dfr(~ read_tsv(here("loc-02-input/pco2_raw", .), show_col_types = FALSE, ))
+
+```
+
+```{r}
+
+# handle date and time columns
+# combine date and time
+GO_LOC02$PcDate <- as.character(GO_LOC02$PcDate) 
+GO_LOC02$PcTime <- as.character(GO_LOC02$PcTime) 
+#GO_LOC02$PcTime <- as.character(GO_LOC02$PcTime) 
+GO_LOC02$date_time <- paste(GO_LOC02$PcDate, GO_LOC02$PcTime)
+GO_LOC02$date_time_utc <- as.POSIXct(GO_LOC02$date_time, tz = "UTC", format="%d/%m/%y %H:%M:%OS")
+
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = EquPress)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = CO2ppm)) +
+  geom_point() +
+  theme_minimal()
+
+```
+
+# Interpolate CTD data to GO timestamps
+
+```{r}
+
+
+lat <- data.frame(approx(combined$datetime_utc, combined$latitude, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
+latitude <- lat$y 
+
+lon <- data.frame(approx(combined$datetime_utc, combined$longitude, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
+longitude <- lon$y 
+
+dye <- data.frame(approx(combined$datetime_utc, combined$rho_ppb, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
+rhodamine_ppb <- dye$y 
+
+temperature <- data.frame(approx(combined$datetime_utc, combined$temperature, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
+temperature_c  <- temperature$y 
+
+sal <- data.frame(approx(combined$datetime_utc, combined$salinity, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
+salinity_psu <- sal$y 
+
+# alk <- data.frame(approx(combined$datetime_utc, combined$Corrected_TA_umol_kg_, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
+# alkalinity_umolkg <- alk$y 
+
+press <- data.frame(approx(pressure$TIMESTAMP, pressure$BaroPress_hPa, xout = GO_LOC02$date_time_utc, rule = 1, method = "linear"))
+atm_pressure_hPa <- press$y 
+
+GO_LOC02 <- cbind(GO_LOC02, latitude, longitude, atm_pressure_hPa, rhodamine_ppb, temperature_c, salinity_psu) #, alkalinity_umolkg)
+
+```
+# Inspect interpolated ancillary data
+
+```{r}
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = temperature_c)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = salinity_psu)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = atm_pressure_hPa)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC02, aes(x = date_time_utc, y = rhodamine_ppb)) +
+  geom_point() +
+  theme_minimal()
+
+# ggplot(GO_LOC02, aes(x = date_time_utc, y = alkalinity_umolkg)) +
+#   geom_point() +
+#   theme_minimal()
+
+# pCO2 data start at 2025-08-12 16:49, TSG combined data set starts at 2025-08-13 07:37
+# are there SSS and SST data from the interval in between to allow pCO2 calculations?
+
+```
+# Adjust columns and write csv
+
+```{r}
+
+GO_LOC02 <- GO_LOC02 |>
+  select(-date_time, -'N/A') |>
+  relocate(date_time_utc, .before = Type) |>
+  relocate(latitude, .before = Type) |>
+  relocate(longitude, .before = Type) 
+  
+
+write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02.csv'), row.names = FALSE)
+
+```
+
+
+
+
