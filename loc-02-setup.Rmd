@@ -16,6 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(here)
 library(lubridate)
 library(tidyverse)
+library(plotly)
 
 ```
 
@@ -62,8 +63,12 @@ ggplot(combined, aes(x = datetime_utc, y = ph_corrected, color = ph_flag)) +
   theme_minimal()
 
 ggplot(combined, aes(x = datetime_utc, y = rho_ppb, color = rho_flag)) +
-  geom_point() +
-  theme_minimal()
+   geom_point() +
+   theme_minimal()
+
+
+# rhod <- ggplot(combined, aes(x = datetime_utc, y = rho_ppb, color = rho_flag)) + geom_point() + theme_minimal()
+# plotly(rhod)
 
 # ggplot(combined, aes(x = DateTime_UTC, y = Corrected_TA_umol_kg_)) +
 #   geom_point() +
@@ -139,8 +144,10 @@ ggplot(GO_LOC02, aes(x = date_time_utc, y = CO2ppm)) +
 # are there SSS and SST data from the interval in between to allow pCO2 calculations?
 
 # remove lines without TSG
-GO_LOC02 <- GO_LOC02 |> filter(date_time_utc > "2025-08-13 07:37:00")
+GO_LOC02 <- GO_LOC02 |> filter(date_time_utc > "2025-08-13 07:37:00") |>
+  mutate(EquTemp = case_when(EquTemp == 0.00 ~ NaN, TRUE ~ EquTemp))
 # data set now begins with standard run at start of TSG data
+# initial round of stds and first ATM are missing equilibrator temperature 
 
 # plot again
 ggplot(GO_LOC02, aes(x = date_time_utc, y = EquPress)) +
@@ -157,7 +164,7 @@ ggplot(GO_LOC02, aes(x = date_time_utc, y = CO2ppm)) +
 
 ```
 
-# Interpolate CTD data to GO timestamps
+# Interpolate TSG data to GO timestamps
 
 ```{r}
 
@@ -181,13 +188,16 @@ temperature_c  <- temperature$y
 sal <- data.frame(approx(combined$datetime_utc, combined$salinity, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
 salinity_psu <- sal$y 
 
+ph <- data.frame(approx(combined$datetime_utc, combined$ph_corrected, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
+ph_corrected <- ph$y 
+
 # alk <- data.frame(approx(combined$datetime_utc, combined$Corrected_TA_umol_kg_, xout = GO_LOC02$date_time_utc, rule = 2, method = "linear"))
 # alkalinity_umolkg <- alk$y 
 
 press <- data.frame(approx(pressure$TIMESTAMP, pressure$BaroPress_hPa, xout = GO_LOC02$date_time_utc, rule = 1, method = "linear"))
 atm_pressure_hPa <- press$y 
 
-GO_LOC02 <- cbind(GO_LOC02, latitude, longitude, atm_pressure_hPa, rhodamine_ppb, temperature_c, salinity_psu) #, alkalinity_umolkg)
+GO_LOC02 <- cbind(GO_LOC02, latitude, longitude, atm_pressure_hPa, rhodamine_ppb, temperature_c, salinity_psu, ph_corrected) #, alkalinity_umolkg)
 
 ```
 # Inspect interpolated ancillary data
@@ -210,6 +220,14 @@ ggplot(GO_LOC02, aes(x = date_time_utc, y = rhodamine_ppb)) +
   geom_point() +
   theme_minimal()
 
+ggplot(GO_LOC02, aes(x = date_time_utc, y = ph_corrected)) +
+  geom_point() +
+  theme_minimal()
+
+ggplot(GO_LOC02, aes(x = longitude, y = latitude, color = ph_corrected)) +
+  geom_point() +
+  theme_minimal()
+
 # ggplot(GO_LOC02, aes(x = date_time_utc, y = alkalinity_umolkg)) +
 #   geom_point() +
 #   theme_minimal()
@@ -225,22 +243,201 @@ GO_LOC02 <- GO_LOC02 |>
   relocate(date_time_utc, .before = Type) |>
   relocate(latitude, .before = Type) |>
   relocate(longitude, .before = Type) 
-  
-write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02.csv'), row.names = FALSE)
+
+# calculate absolute equilibrator pressure
+GO_LOC02$EquPressCalc <- GO_LOC02$atm_pressure_hPa + GO_LOC02$EquPress
 
 ```
-# problem with equ pressure? 
+
+# Investigate standards
 
 ```{r}
-unique(GO_LOC02$EquPress)
+
+ATM <- GO_LOC02 |>  filter(Type == 'ATM' | Type == 'ATM-DRAIN') 
+std1 <- GO_LOC02 |>  filter(Type == 'STD1' | Type == 'STD1-DRAIN') 
+std2 <- GO_LOC02 |>  filter(Type == 'STD2' | Type == 'STD2-DRAIN') 
+std3 <- GO_LOC02 |>  filter(Type == 'STD3' | Type == 'STD3-DRAIN') 
+std4 <- GO_LOC02 |>  filter(Type == 'STD4' | Type == 'STD4-DRAIN') 
+equ <- GO_LOC02 |>  filter(Type == 'EQU' | Type == 'EQU-DRAIN') 
+
+a <- ggplot(ATM, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + geom_line() + theme_minimal() + labs(title='ATM')
+ggplotly(a)
+#ggplot(ATM, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + theme_minimal() + labs(title='ATM')
+s1 <-ggplot(std1, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + geom_line() + theme_minimal() + labs(title='STD1 0 ppm')
+ggplotly(s1)
+#ggplot(std1, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal() + labs(title='STD1 0 ppm')
+s2 <-ggplot(std2, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + geom_line() + theme_minimal()+ labs(title='STD2 426.36 ppm')
+ggplotly(s2)
+#ggplot(std2, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD2 426.36 ppm')
+s3 <-ggplot(std3, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + geom_line() + theme_minimal()+ labs(title='STD3 547.63 ppm')
+ggplotly(s3)
+#ggplot(std3, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD3 547.63 ppm')
+s4 <-ggplot(std4, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + geom_line() + theme_minimal()+ labs(title='STD4 1234.58 ppm')
+ggplotly(s4)
+#ggplot(std4, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD4 1234.58 ppm')
+sw <-ggplot(equ, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + geom_line() +  theme_minimal()+ labs(title='Seawater')
+ggplotly(sw)
+#ggplot(equ, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='Seawater')
+
+```
+```{r}
+
+# 
+
+stds <- GO_LOC02 |>  filter(Type == 'STD1' | Type == 'STD1-DRAIN' | Type == 'STD2' | Type == 'STD2-DRAIN' | Type == 'STD3' | Type == 'STD3-DRAIN' | Type == 'STD4' | Type == 'STD4-DRAIN') 
+
+std_label <- stds$Type
+std_label <- as.data.frame(std_label)
+
+write_csv(std_label, here('loc-02-input/sequence-list.csv'))
+
+# manually edit sequence :)
+
+sequence <- read_csv(here('loc-02-input/sequence.csv')) 
+stds <- cbind(stds, sequence)
+stds <- stds |> relocate(sequence, .after = Type)
+
+stds <- stds |> select(date_time_utc, latitude, longitude, Type, sequence, CO2StdValue, CO2ppm)
+
+stdavg <- stds |> group_by(sequence) |> summarise(avg = mean(CO2ppm))
+
+first_time <- stds |> group_by(sequence) |> summarise(first(date_time_utc)) |> select(-sequence)
+
+stdavg <- cbind(stdavg, first_time)
+stdavg <- stdavg |> 
+  rename(date_time_utc = "first(date_time_utc)") |>
+  rename(seq_first = sequence) |>
+  rename(CO2_std_avg = avg)
+
+stds <- left_join(stds, stdavg)
+
+# flag some measurements to be excluded?
+# something weird when a single meas was followed by 3? shutdown?
+
 ```
 
 
 ```{r}
-# pco2sys processing notes
 
-#flagged as bad three instances of low H2O flow followed by CO2 spike
-#trouble getting equ press to calculate -- need to do this following data transformation module
+std1a <- stds |>  filter(Type == 'STD1' | Type == 'STD1-DRAIN') 
+std2a <- stds |>  filter(Type == 'STD2' | Type == 'STD2-DRAIN') 
+std3a <- stds |>  filter(Type == 'STD3' | Type == 'STD3-DRAIN') 
+std4a <- stds |>  filter(Type == 'STD4' | Type == 'STD4-DRAIN') 
+
+s1a <- ggplot(std1a, aes(x = date_time_utc, y = CO2_std_avg)) +  geom_point() +  theme_minimal() + labs(title='STD1 0 ppm')
+ggplotly(s1a)
+s2a <-ggplot(std2a, aes(x = date_time_utc, y = CO2_std_avg)) +  geom_point() +  theme_minimal()+ labs(title='STD2 426.36 ppm')
+ggplotly(s2a)
+s3a <-ggplot(std3a, aes(x = date_time_utc, y = CO2_std_avg)) +  geom_point() +  theme_minimal()+ labs(title='STD3 547.63 ppm')
+ggplotly(s3a)
+s4a <-ggplot(std4a, aes(x = date_time_utc, y = CO2_std_avg)) +  geom_point() +  theme_minimal()+ labs(title='STD4 1234.58 ppm')
+ggplotly(s4a)
+
+```
+```{r}
+
+write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02_to_flag.csv'), row.names = FALSE)
+
+# manually add flags
+
+flagged <- read_csv(here('loc-02-for-pco2sys/GO_LOC02_flagged.csv'))
+
+flagged <- flagged |>
+  mutate(Flag_manual = case_when(is.na(Flag_manual) ~ 2, TRUE ~ Flag_manual))
+
+
+flagged$PcDate <- as.character(flagged$PcDate) 
+flagged$PcTime <- as.character(flagged$PcTime) 
+flagged$date_time <- paste(flagged$PcDate, flagged$PcTime)
+flagged$date_time_utc <- as.POSIXct(flagged$date_time, tz = "UTC", format="%d/%m/%y %H:%M:%OS")
+
+flagged <- flagged |> select(-date_time)
+
+```
+
+```{r}
+
+ATMf <- flagged |>  filter(Type == 'ATM' | Type == 'ATM-DRAIN')
+std1f <- flagged |>  filter(Type == 'STD1' | Type == 'STD1-DRAIN') 
+std2f <- flagged |>  filter(Type == 'STD2' | Type == 'STD2-DRAIN') 
+std3f <- flagged |>  filter(Type == 'STD3' | Type == 'STD3-DRAIN') 
+std4f <- flagged |>  filter(Type == 'STD4' | Type == 'STD4-DRAIN') 
+equf <- flagged |>  filter(Type == 'EQU' | Type == 'EQU-DRAIN') 
+
+atmf <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + geom_line() + theme_minimal() + labs(title='ATM')
+atmf <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal() + labs(title='ATM')
+ggplotly(atmf)
+#ggplot(ATM, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + theme_minimal() + labs(title='ATM')
+s1f <-ggplot(std1f, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal() + labs(title='STD1 0 ppm')
+ggplotly(s1f)
+#ggplot(std1, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal() + labs(title='STD1 0 ppm')
+s2f <-ggplot(std2f, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) + geom_point() + theme_minimal()+ labs(title='STD2 426.36 ppm')
+ggplotly(s2f)
+#ggplot(std2, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD2 426.36 ppm')
+s3f <-ggplot(std3f, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal()+ labs(title='STD3 547.63 ppm')
+ggplotly(s3f)
+#ggplot(std3, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD3 547.63 ppm')
+s4f <-ggplot(std4f, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal()+ labs(title='STD4 1234.58 ppm')
+ggplotly(s4f)
+#ggplot(std4, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD4 1234.58 ppm')
+swf <-ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() +  theme_minimal()+ labs(title='Seawater')
+ggplotly(swf)
+#ggplot(equ, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='Seawater')
+
+swf <-ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = temperature_c)) +  geom_point() +  theme_minimal()+ labs(title='Seawater') 
+ggplotly(swf) 
+
+swp <-ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = ph_corrected)) +  geom_point() +  theme_minimal()+ labs(title='Seawater') 
+ggplotly(swp) 
+
+```
+
+```{r}
+
+# 
+
+stds <- flagged |>  filter(Type == 'STD1' | Type == 'STD1-DRAIN' | Type == 'STD2' | Type == 'STD2-DRAIN' | Type == 'STD3' | Type == 'STD3-DRAIN' | Type == 'STD4' | Type == 'STD4-DRAIN') 
+
+stds <- cbind(stds, sequence)
+stds <- stds |> relocate(sequence, .after = Type)
+
+stds <- stds |> select(date_time_utc, latitude, longitude, Type, sequence, CO2StdValue, CO2ppm)
+
+stdavg <- stds |> group_by(sequence) |> summarise(avg = mean(CO2ppm))
+
+first_time <- stds |> group_by(sequence) |> summarise(first(date_time_utc)) |> select(-sequence)
+
+stdavg <- cbind(stdavg, first_time)
+stdavg <- stdavg |> 
+  rename(date_time_utc = "first(date_time_utc)") |>
+  rename(seq_first = sequence) |>
+  rename(CO2_std_avg = avg)
+
+stds <- left_join(stds, stdavg)
+
+# inspect 
+
+# join averaged standards to full data set
+stds <- stds |> select(date_time_utc, CO2_std_avg)
+flagged <- left_join(flagged, stds)
+
+# TODO: plot standards again
+
+```
+
+
+
+# pco2sys processing notes  
+
+```{r}
+
+# flagged as bad three instances of low H2O flow followed by CO2 spike
+
+# calculated absolute equilibrator pressure in R by adding differential eq pressure to atm pressure. 
+# Then assigned this to LICOR pressure and EQU pressure in pCO2sys and unchecked the differential box. 
+# otherwise, pCO2sys can't find EQU Pressure (calc) and delta P
+
+#write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02.csv'), row.names = FALSE)
 
 ```
 
