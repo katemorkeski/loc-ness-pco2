@@ -42,6 +42,18 @@ pressure <- pressure[-1,]
 pressure$TIMESTAMP <- as.POSIXct(pressure$TIMESTAMP, tz = "UTC", format="%Y-%m-%d %H:%M:%OS")
 pressure$BaroPress_hPa <- as.double(pressure$BaroPress_hPa)
 
+# plot wind
+met$TIMESTAMP <- as.POSIXct(met$TIMESTAMP, tz = "UTC", format="%Y-%m-%d %H:%M:%OS")
+met <- met[-1,]
+met <- met[-1,]
+met$WindSpd <- as.numeric(met$WindSpd)
+met$WindDir <- as.numeric(met$WindDir)
+met$AirTemp <- as.numeric(met$AirTemp)
+
+ggplot(met, aes(x = TIMESTAMP, y = WindSpd)) +  geom_point() +  theme_minimal()
+ggplot(met, aes(x = TIMESTAMP, y = WindDir)) +  geom_point() +  theme_minimal()
+ggplot(met, aes(x = TIMESTAMP, y = AirTemp)) +  geom_point() +  theme_minimal()
+
 ```
 
 ```{r}
@@ -63,16 +75,8 @@ ggplot(combined, aes(x = datetime_utc, y = ph_corrected, color = ph_flag)) +
   theme_minimal()
 
 ggplot(combined, aes(x = datetime_utc, y = rho_ppb, color = rho_flag)) +
-   geom_point() +
-   theme_minimal()
-
-
-# rhod <- ggplot(combined, aes(x = datetime_utc, y = rho_ppb, color = rho_flag)) + geom_point() + theme_minimal()
-# plotly(rhod)
-
-# ggplot(combined, aes(x = DateTime_UTC, y = Corrected_TA_umol_kg_)) +
-#   geom_point() +
-#   theme_minimal()
+  geom_point() +
+  theme_minimal()
 
 ggplot(pressure, aes(x = TIMESTAMP, y = BaroPress_hPa)) +
   geom_line() +
@@ -88,7 +92,7 @@ combined <- combined |>
   mutate(salinity = replace(salinity, salinity_flag == "4", NA)) |>
   mutate(ph_corrected = replace(ph_corrected, ph_flag == "4", NA)) |>
   mutate(rho_ppb = replace(rho_ppb, rho_flag == "4", NA)) 
- 
+
 ggplot(combined, aes(x = datetime_utc, y = temperature, color = temperature_flag)) +
   geom_point() +
   theme_minimal()
@@ -197,7 +201,19 @@ ph_corrected <- ph$y
 press <- data.frame(approx(pressure$TIMESTAMP, pressure$BaroPress_hPa, xout = GO_LOC02$date_time_utc, rule = 1, method = "linear"))
 atm_pressure_hPa <- press$y 
 
-GO_LOC02 <- cbind(GO_LOC02, latitude, longitude, atm_pressure_hPa, rhodamine_ppb, temperature_c, salinity_psu, ph_corrected) #, alkalinity_umolkg)
+winds <- data.frame(approx(met$TIMESTAMP, met$WindSpd, xout = GO_LOC02$date_time_utc, rule = 1, method = "linear"))
+wind_spd <- winds$y
+
+windd <- data.frame(approx(met$TIMESTAMP, met$WindDir, xout = GO_LOC02$date_time_utc, rule = 1, method = "linear"))
+wind_dir <- windd$y
+
+airt <- data.frame(approx(met$TIMESTAMP, met$WindSpd, xout = GO_LOC02$date_time_utc, rule = 1, method = "linear"))
+air_temp <- airt$y
+
+comp <- data.frame(approx(met$TIMESTAMP, met$WindSpd, xout = GO_LOC02$date_time_utc, rule = 1, method = "linear"))
+compass <- comp$y
+
+GO_LOC02 <- cbind(GO_LOC02, latitude, longitude, atm_pressure_hPa, rhodamine_ppb, temperature_c, salinity_psu, ph_corrected, wind_spd, wind_dir, air_temp, compass) #, alkalinity_umolkg)
 
 ```
 # Inspect interpolated ancillary data
@@ -310,6 +326,7 @@ stdavg <- stdavg |>
   rename(CO2_std_avg = avg)
 
 stds <- left_join(stds, stdavg)
+GO_LOC02 <- left_join(GO_LOC02, stds)
 
 # flag some measurements to be excluded?
 # something weird when a single meas was followed by 3? shutdown?
@@ -336,7 +353,7 @@ ggplotly(s4a)
 ```
 ```{r}
 
-write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02_to_flag.csv'), row.names = FALSE)
+#write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02_to_flag.csv'), row.names = FALSE)
 
 # manually add flags
 
@@ -353,6 +370,8 @@ flagged$date_time_utc <- as.POSIXct(flagged$date_time, tz = "UTC", format="%d/%m
 
 flagged <- flagged |> select(-date_time)
 
+
+
 ```
 
 ```{r}
@@ -367,28 +386,36 @@ equf <- flagged |>  filter(Type == 'EQU' | Type == 'EQU-DRAIN')
 atmf <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + geom_line() + theme_minimal() + labs(title='ATM')
 atmf <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal() + labs(title='ATM')
 ggplotly(atmf)
-#ggplot(ATM, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + theme_minimal() + labs(title='ATM')
+
 s1f <-ggplot(std1f, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal() + labs(title='STD1 0 ppm')
 ggplotly(s1f)
-#ggplot(std1, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal() + labs(title='STD1 0 ppm')
+
 s2f <-ggplot(std2f, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) + geom_point() + theme_minimal()+ labs(title='STD2 426.36 ppm')
 ggplotly(s2f)
-#ggplot(std2, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD2 426.36 ppm')
+
 s3f <-ggplot(std3f, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal()+ labs(title='STD3 547.63 ppm')
 ggplotly(s3f)
-#ggplot(std3, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD3 547.63 ppm')
+
 s4f <-ggplot(std4f, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal()+ labs(title='STD4 1234.58 ppm')
 ggplotly(s4f)
-#ggplot(std4, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='STD4 1234.58 ppm')
+
 swf <-ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() +  theme_minimal()+ labs(title='Seawater')
 ggplotly(swf)
-#ggplot(equ, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() +  theme_minimal()+ labs(title='Seawater')
 
 swf <-ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = temperature_c)) +  geom_point() +  theme_minimal()+ labs(title='Seawater') 
 ggplotly(swf) 
 
 swp <-ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = ph_corrected)) +  geom_point() +  theme_minimal()+ labs(title='Seawater') 
 ggplotly(swp) 
+
+q <-ggplot(equf, aes(x = date_time_utc, y = EquH2OFlow)) +  geom_point() +  theme_minimal()+ labs(title='H2O Flow') 
+ggplotly(q)
+
+eq <- ggplot(equf, aes(x = EquH2OFlow, y = CO2ppm, color = EquTemp)) +  geom_point() +  theme_minimal()+ labs(title='H2O Flow') 
+ggplotly(eq)
+
+sq <- ggplot(equf, aes(x = EquH2OFlow, y = CO2ppm, color = temperature_c)) +  geom_point() +  theme_minimal()+ labs(title='H2O Flow') 
+ggplotly(sq)
 
 ```
 
@@ -401,7 +428,9 @@ stds <- flagged |>  filter(Type == 'STD1' | Type == 'STD1-DRAIN' | Type == 'STD2
 stds <- cbind(stds, sequence)
 stds <- stds |> relocate(sequence, .after = Type)
 
-stds <- stds |> select(date_time_utc, latitude, longitude, Type, sequence, CO2StdValue, CO2ppm)
+stds <- stds |>  filter(Flag_manual == 3 | Flag_manual == 2)
+
+stds <- stds |> select(date_time_utc, latitude, longitude, Type, sequence, Flag_manual, CO2StdValue, CO2ppm)
 
 stdavg <- stds |> group_by(sequence) |> summarise(avg = mean(CO2ppm))
 
@@ -421,7 +450,102 @@ stds <- left_join(stds, stdavg)
 stds <- stds |> select(date_time_utc, CO2_std_avg)
 flagged <- left_join(flagged, stds)
 
-# TODO: plot standards again
+```
+```{r}
+
+# plot averaged standards again
+
+std1fa <- flagged |>  filter(Type == 'STD1' | Type == 'STD1-DRAIN') 
+std2fa <- flagged |>  filter(Type == 'STD2' | Type == 'STD2-DRAIN') 
+std3fa <- flagged |>  filter(Type == 'STD3' | Type == 'STD3-DRAIN') 
+std4fa <- flagged |>  filter(Type == 'STD4' | Type == 'STD4-DRAIN') 
+
+s1fa <-ggplot(std1fa, aes(x = date_time_utc, y = CO2_std_avg)) +  geom_point() + theme_minimal() + labs(title='STD1 0 ppm')
+ggplotly(s1fa)
+
+s2fa <-ggplot(std2fa, aes(x = date_time_utc, y = CO2_std_avg)) + geom_point() + theme_minimal()+ labs(title='STD2 426.36 ppm')
+ggplotly(s2fa)
+
+s3fa <-ggplot(std3fa, aes(x = date_time_utc, y = CO2_std_avg)) +  geom_point() + theme_minimal()+ labs(title='STD3 547.63 ppm')
+ggplotly(s3fa)
+
+s4fa <-ggplot(std4fa, aes(x = date_time_utc, y = CO2_std_avg)) +  geom_point() + theme_minimal()+ labs(title='STD4 1234.58 ppm')
+ggplotly(s4fa)
+
+```
+
+
+```{r}
+
+ATMf <- flagged |>  filter(Type == 'ATM' | Type == 'ATM-DRAIN')
+
+ATMf$rho_log <- as.numeric(NA)
+ATMf <- ATMf |> mutate(rho_log = log10(rhodamine_ppb+0.5))
+
+atmf <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal() + labs(title='ATM')
+ggplotly(atmf)
+
+ATMf <- ATMf |>  filter(Flag_manual == 2)
+atmrho <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm, color = rho_log)) +  geom_point() + theme_minimal() + labs(title='ATM')
+ggplotly(atmrho)
+atmf <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + theme_minimal() + labs(title='ATM')
+ggplotly(atmf)
+
+```
+
+
+```{r}
+
+ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = "water")) + geom_point()+
+    geom_point(data = ATMf, aes(x = date_time_utc, y = CO2ppm, color = "air"))  +
+  ylim(400, 500)
+
+
+equf$rho_log <- as.numeric(NA)
+equf <- equf |> mutate(rho_log = log10(rhodamine_ppb+2))
+rh <- ggplot(equf, aes(x = date_time_utc, y = rho_log)) + geom_point() +geom_line()
+ggplotly(rh)
+
+# ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = rho_log)) + geom_point() +
+#   ylim(400, 500)
+# 
+# p<-ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = rho_log)) + geom_point()
+# ggplotly(p)
+
+l<-ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = rho_log)) + geom_point() +scale_color_gradient2(low = "blue",mid = "yellow",high = "red", midpoint = 1.2)
+ggplotly(l)
+
+# aw <- ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = rho_log)) + geom_point()+ scale_color_gradient2(low = "blue",mid = "yellow",high = "red", midpoint = 1.2)+ geom_point(data = ATMf, aes(x = date_time_utc, y = CO2ppm))  
+# ggplotly(aw)
+
+```
+
+
+```{r}
+
+# # instead of this, need time
+# atm_label <- ATMf$Type
+# atm_label <- as.data.frame(atm_label)
+# 
+# write_csv(atm_label, here('loc-02-input/atm-sequence-list.csv'))
+# 
+# atmavg <- ATMf |> group_by(sequence) |> summarise(avg = mean(CO2ppm))
+# 
+# first_time <- stds |> group_by(sequence) |> summarise(first(date_time_utc)) |> select(-sequence)
+# 
+# stdavg <- cbind(stdavg, first_time)
+# stdavg <- stdavg |> 
+#   rename(date_time_utc = "first(date_time_utc)") |>
+#   rename(seq_first = sequence) |>
+#   rename(CO2_std_avg = avg)
+# 
+# stds <- left_join(stds, stdavg)
+# 
+# # inspect 
+# 
+# # join averaged standards to full data set
+# stds <- stds |> select(date_time_utc, CO2_std_avg)
+# flagged <- left_join(flagged, stds)
 
 ```
 
@@ -437,7 +561,7 @@ flagged <- left_join(flagged, stds)
 # Then assigned this to LICOR pressure and EQU pressure in pCO2sys and unchecked the differential box. 
 # otherwise, pCO2sys can't find EQU Pressure (calc) and delta P
 
-#write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02.csv'), row.names = FALSE)
+write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02.csv'), row.names = FALSE)
 
 ```
 
