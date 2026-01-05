@@ -26,7 +26,7 @@ library(plotly)
 
 Sys.setenv(TZ='UTC')
 
-combined <- read_csv(here('loc-02-input/loc02_uw_qc.csv')) 
+combined <- read_csv(here('loc-02-input/loc02_uw_qc_no_TA.csv')) 
 
 #combined$datetime_utc <- as.POSIXct(combined$datetime_utc, tz = "UTC", format="%d-%b-%Y %H:%M:%OS")
 
@@ -149,9 +149,9 @@ ggplot(GO_LOC02, aes(x = date_time_utc, y = CO2ppm)) +
 
 # remove lines without TSG
 GO_LOC02 <- GO_LOC02 |> filter(date_time_utc > "2025-08-13 07:37:00") |>
-  mutate(EquTemp = case_when(EquTemp == 0.00 ~ NaN, TRUE ~ EquTemp))
+  mutate(EquTemp = case_when(Error == 304 ~ 21.50, TRUE ~ EquTemp))
 # data set now begins with standard run at start of TSG data
-# initial round of stds and first ATM are missing equilibrator temperature 
+# initial round of stds and first ATM were missing equilibrator temperature; filled these in with temperature of 21.50 (temp at first EQU measurements) to avoid having to flag as bad in pCO2sys 
 
 # plot again
 ggplot(GO_LOC02, aes(x = date_time_utc, y = EquPress)) +
@@ -362,15 +362,12 @@ flagged <- read_csv(here('loc-02-for-pco2sys/GO_LOC02_flagged.csv'))
 flagged <- flagged |>
   mutate(Flag_manual = case_when(is.na(Flag_manual) ~ 2, TRUE ~ Flag_manual))
 
-
 flagged$PcDate <- as.character(flagged$PcDate) 
 flagged$PcTime <- as.character(flagged$PcTime) 
 flagged$date_time <- paste(flagged$PcDate, flagged$PcTime)
 flagged$date_time_utc <- as.POSIXct(flagged$date_time, tz = "UTC", format="%d/%m/%y %H:%M:%OS")
 
 flagged <- flagged |> select(-date_time)
-
-
 
 ```
 
@@ -450,7 +447,13 @@ stds <- left_join(stds, stdavg)
 stds <- stds |> select(date_time_utc, CO2_std_avg)
 flagged <- left_join(flagged, stds)
 
+# replace CO2 measured value with average for each group of standards
+flagged <- flagged |>
+  mutate(CO2ppm = case_when(CO2StdValue != "NA" ~ CO2_std_avg,
+                            is.na(CO2StdValue) ~ CO2ppm))
+
 ```
+
 ```{r}
 
 # plot averaged standards again
@@ -477,10 +480,14 @@ ggplotly(s4fa)
 
 ```{r}
 
+ATM_sequence <- read_csv(here('loc-02-input/atm_sequence.csv'))
+
 ATMf <- flagged |>  filter(Type == 'ATM' | Type == 'ATM-DRAIN')
 
+ATMf <- cbind(ATMf, ATM_sequence)
+
 ATMf$rho_log <- as.numeric(NA)
-ATMf <- ATMf |> mutate(rho_log = log10(rhodamine_ppb+0.5))
+ATMf <- ATMf |> mutate(rho_log = log10(rhodamine_ppb+0.5)) # for plotting
 
 atmf <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm, color = Flag_manual)) +  geom_point() + theme_minimal() + labs(title='ATM')
 ggplotly(atmf)
@@ -491,6 +498,8 @@ ggplotly(atmrho)
 atmf <- ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm)) +  geom_point() + theme_minimal() + labs(title='ATM')
 ggplotly(atmf)
 
+ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm)) + geom_line()+ geom_point() + theme_minimal() + labs(title='ATM')
+
 ```
 
 
@@ -499,7 +508,6 @@ ggplotly(atmf)
 ggplot(equf, aes(x = date_time_utc, y = CO2ppm, color = "water")) + geom_point()+
     geom_point(data = ATMf, aes(x = date_time_utc, y = CO2ppm, color = "air"))  +
   ylim(400, 500)
-
 
 equf$rho_log <- as.numeric(NA)
 equf <- equf |> mutate(rho_log = log10(rhodamine_ppb+2))
@@ -523,47 +531,120 @@ ggplotly(l)
 
 ```{r}
 
-# # instead of this, need time
-# atm_label <- ATMf$Type
-# atm_label <- as.data.frame(atm_label)
-# 
-# write_csv(atm_label, here('loc-02-input/atm-sequence-list.csv'))
-# 
-# atmavg <- ATMf |> group_by(sequence) |> summarise(avg = mean(CO2ppm))
-# 
-# first_time <- stds |> group_by(sequence) |> summarise(first(date_time_utc)) |> select(-sequence)
-# 
-# stdavg <- cbind(stdavg, first_time)
-# stdavg <- stdavg |> 
+# average each group of ATM measurements and add to flagged dataframe
+
+atmavg <- ATMf |> group_by(atm_sequence) |> summarise(CO2_atm_avg = mean(CO2ppm))
+
+ATMf <- left_join(ATMf, atmavg)
+
+#first_atm <- ATMf |> group_by(atm_sequence) |> summarise(first(date_time_utc)) |> select(-atm_sequence)
+#atmavg <- cbind(atmavg, first_atm)
+
+# atmavg <- atmavg |>
 #   rename(date_time_utc = "first(date_time_utc)") |>
-#   rename(seq_first = sequence) |>
-#   rename(CO2_std_avg = avg)
-# 
-# stds <- left_join(stds, stdavg)
-# 
-# # inspect 
-# 
-# # join averaged standards to full data set
-# stds <- stds |> select(date_time_utc, CO2_std_avg)
-# flagged <- left_join(flagged, stds)
+#   rename(seq_first = atm_sequence) |>
+#   rename(CO2_atm_avg = avg)
+
+ggplot(ATMf, aes(x = date_time_utc, y = CO2ppm, color = "all")) + geom_point()+
+    geom_point(data = ATMf, aes(x = date_time_utc, y = CO2_atm_avg, color = "average"))  
+
+# join averaged standards to full data set
+ATMf <- ATMf |> 
+  select(date_time_utc, CO2ppm, CO2_atm_avg) |>
+  rename(ATM_meas_CO2_ppm = CO2ppm) |>
+  rename(ATM_avg_CO2_ppm = CO2_atm_avg)
+
+flagged_all <- left_join(flagged, ATMf) 
+
+# replace CO2 measured value with average for each group of standards
+flagged_all <- flagged_all |>
+  mutate(CO2ppm = case_when(Type == "ATM" ~ ATM_avg_CO2_ppm,
+                            Type != "ATM" ~ CO2ppm)) |>
+  mutate(EquTemp = case_when(Error == 304 ~ 21.50, TRUE ~ EquTemp)) |>
+  mutate(EquTemp = case_when(date_time_utc == "2025-08-13 08:28:16" ~ 21.50, TRUE ~ EquTemp))
+
+flagged_all <- flagged_all |> filter(!is.na(CO2ppm))
 
 ```
 
+```{r}
 
+# write file to ingest into pCO2sys
+
+write.csv(flagged_all, here('loc-02-for-pco2sys/GO_LOC02.csv'), row.names = FALSE, na = "NaN")
+
+```
 
 # pco2sys processing notes  
 
 ```{r}
 
-# flagged as bad three instances of low H2O flow followed by CO2 spike
+# in R, flagged/excluded bad and then averaged good measurements of STDS and ATM
+
+# flagged as bad 4 instances of low H2O flow followed by CO2 spike and one single measurement where connection was lost
+# then interpolated these. In Final file, manually edited flag to 3 and added QC subflag
 
 # calculated absolute equilibrator pressure in R by adding differential eq pressure to atm pressure. 
 # Then assigned this to LICOR pressure and EQU pressure in pCO2sys and unchecked the differential box. 
 # otherwise, pCO2sys can't find EQU Pressure (calc) and delta P
 
-write.csv(GO_LOC02, here('loc-02-for-pco2sys/GO_LOC02.csv'), row.names = FALSE)
+# no temperature time offset between SST and EQU temp
 
 ```
+# Merge met and CO2 data with full underway data set
+
+```{r}
+
+underway <- read_csv(here('loc-02-input/loc02_uw_qc.csv')) 
+fco2 <- read_csv(here('loc-02-pco2sys-output/LOC_02_Final.csv'), skip = 4) 
+
+fco2$date <- dmy(fco2$DATE_UTC__ddmmyyyy)
+fco2$datetime_utc <- paste(fco2$date, fco2$`TIME_UTC_hh:mm:ss`)
+
+fco2$datetime_utc <- as.POSIXct(fco2$datetime_utc, tz = "UTC", format="%Y-%m-%d %H:%M:%OS")
+
+fco2 <- fco2 |>
+  rename(latitude = LAT_dec_degree) |>
+  rename(longitude = LONG_dec_degree) |>
+  rename(PRES_ATM_SSP_hPa = `PRES_ATM@SSP_hPa`) |>
+  rename(fCO2_SW_SST_uatm = `fCO2_SW@SST_uatm`) |>
+  select(datetime_utc, latitude, longitude, xCO2_EQU_ppm, xCO2_ATM_ppm, xCO2_ATM_interpolated_ppm, PRES_EQU_hPa, PRES_ATM_SSP_hPa, TEMP_EQU_C, SST_C, SAL_permil, fCO2_SW_SST_uatm, fCO2_ATM_interpolated_uatm, dfCO2_uatm, WOCE_QC_FLAG, QC_SUBFLAG)
+
+fco2$xCO2_EQU_ppm <- replace(fco2$xCO2_EQU_ppm, fco2$xCO2_EQU_ppm == -999, NaN)
+fco2$xCO2_ATM_ppm <- replace(fco2$xCO2_ATM_ppm, fco2$xCO2_ATM_ppm == -999, NaN)
+fco2$xCO2_ATM_interpolated_ppm <- replace(fco2$xCO2_ATM_interpolated_ppm, fco2$xCO2_ATM_interpolated_ppm == -999, NaN)
+fco2$fCO2_SW_SST_uatm <- replace(fco2$fCO2_SW_SST_uatm, fco2$fCO2_SW_SST_uatm == -999, NaN)
+fco2$fCO2_ATM_interpolated_uatm <- replace(fco2$fCO2_ATM_interpolated_uatm, fco2$fCO2_ATM_interpolated_uatm == -999, NaN)
+fco2$dfCO2_uatm <- replace(fco2$dfCO2_uatm, fco2$dfCO2_uatm == -999, NaN)
+
+fco2$PRES_EQU_hPa <- replace(fco2$PRES_EQU_hPa, fco2$PRES_EQU_hPa == -999, NaN)
+fco2$PRES_ATM_SSP_hPa <- replace(fco2$PRES_ATM_SSP_hPa, fco2$PRES_ATM_SSP_hPa == -999, NaN)
+fco2$TEMP_EQU_C <- replace(fco2$TEMP_EQU_C, fco2$TEMP_EQU_C == -999, NaN)
+fco2$SST_C <- replace(fco2$SST_C, fco2$SST_C == -999, NaN)
+fco2$SAL_permil <- replace(fco2$SAL_permil, fco2$SAL_permil == -999, NaN)
+
+underway_fco2 <- full_join(underway, fco2)
+
+# met <- met |>
+#   rename(datetime_utc = TIMESTAMP) #|>
+#   #rename(datetime_utc = date_time_utc)
+
+underway_all <- full_join(underway_fco2, met)
+
+underway_all <- underway_all[order(underway_all$datetime_utc), ]
+
+ggplot(underway_all, aes(x = datetime_utc, y = WindSpd)) +  geom_point() +  theme_minimal()
+ggplot(underway_all, aes(x = datetime_utc, y = fCO2_SW_SST_uatm)) +  geom_point() +  theme_minimal()
+ggplot(underway_all, aes(x = datetime_utc, y = xCO2_EQU_ppm)) +  geom_point() +  theme_minimal()
+
+#underway_all <- gsub("-999", "NaN", underway_all)
+
+write.csv(underway_all, here('loc-02-output/LOC02_underway_sensors_fCO2_met.csv'), row.names = FALSE, na = "NaN", fileEncoding = "UTF-8")
+
+```
+
+
+
 
 
 
