@@ -1,0 +1,10 @@
+# in R, flagged/excluded bad and then averaged good measurements of STDS and ATM
+
+# flagged as bad 4 instances of low H2O flow followed by CO2 spike and one single measurement where connection was lost
+# then interpolated these. In Final file, manually edited flag to 3 and added QC subflag
+
+# calculated absolute equilibrator pressure in R by adding differential eq pressure to atm pressure. 
+# Then assigned this to LICOR pressure and EQU pressure in pCO2sys and unchecked the differential box. 
+# otherwise, pCO2sys can't find EQU Pressure (calc) and delta P
+
+# no temperature time offset between SST and EQU temp
