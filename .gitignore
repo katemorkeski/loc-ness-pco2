@@ -47,3 +47,21 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# R project file
+.Rproj
+
+# Data files
+*dat.txt
+*err.txt
+METdat.dat
+loc02_uw_qc.csv
+loc02_uw_qc_no_TA.csv
+NAV_P3007dat.dat
+LOC02_underway_sensors_fCO2_met.csv
+LOC_02*.csv
+LOC_02*.mat
+LOC_02*.ini
+GO_LOC02.csv
+
+
