@@ -623,6 +623,12 @@ fco2$TEMP_EQU_C <- replace(fco2$TEMP_EQU_C, fco2$TEMP_EQU_C == -999, NaN)
 fco2$SST_C <- replace(fco2$SST_C, fco2$SST_C == -999, NaN)
 fco2$SAL_permil <- replace(fco2$SAL_permil, fco2$SAL_permil == -999, NaN)
 
+# round fco2 timestamp to nearest 2 sec to make timestamps match 
+fco2$rounded_time <- round_date(fco2$datetime_utc, "2s")
+fco2 <- fco2 |>
+  select(-datetime_utc, -latitude, -longitude)|>
+  rename(datetime_utc = rounded_time) 
+
 underway_fco2 <- full_join(underway, fco2)
 
 # met <- met |>
